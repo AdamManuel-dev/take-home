@@ -1,0 +1,14 @@
+node_modules/
+dist/
+data/*.json
+data/*.tmp
+.env
+.DS_Store
+.env.*
+!.env.example
+*.log
+coverage/
+agent-skills/
+tmp/
+test-results/
+playwright-report/
