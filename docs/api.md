@@ -3,7 +3,26 @@
 Describe the local JSON contract, including response shapes and a reproducible example.
 
 The built server uses <http://127.0.0.1:3001>. Development requests from port 5173 are proxied.
-Send `Content-Type: application/json` for request bodies. There is no authentication.
+Send `Content-Type: application/json` for request bodies. Every business request requires a session cookie. Mutations additionally require a trusted
+`Origin` and `X-CSRF-Token`; availability search is a read operation despite using POST.
+
+## Authentication and permissions
+
+| Method and path | Request | Response |
+| --- | --- | --- |
+| `POST /api/auth/login` | `{ username, password }`, trusted Origin | Cookie plus `{ profile, csrfToken }` |
+| `GET /api/auth/me` | Session cookie | `{ profile, csrfToken }`, or 401 |
+| `POST /api/auth/logout` | Cookie, Origin, CSRF token | 204 and cleared cookie |
+
+Profiles contain only `id`, `username`, `displayName`, `role`, and optional `staffId`.
+Roles are `user` and `manager`. Session cookies are HttpOnly, SameSite=Lax, and Secure
+in production; the opaque token is never returned in JSON. Sessions expire after eight
+hours and after restart. Login errors are generic and rate-limited.
+
+Both roles can list all staff, read all schedules and search everyone's availability.
+Users can edit only their linked staff's weekly hours, overrides and appointments.
+Managers can edit any staff and create new staff. Account credentials have no API listing.
+The trusted session actor is captured by the server; client-supplied actor fields are ignored.
 
 ## Routes
 
@@ -47,6 +66,9 @@ Errors use `{ "error": "readable message" }`.
 | Status | Meaning |
 | --- | --- |
 | 400 | Invalid body, date, weekday, duration, windows, or malformed JSON |
+| 401 | Missing/expired session or invalid login |
+| 403 | Disallowed role/ownership, untrusted Origin or invalid CSRF token |
+| 429 | Login rate or concurrency limit reached |
 | 404 | Unknown staff, missing appointment, or unknown API route |
 | 409 | Requested appointment start is no longer an offered slot |
 | 413 | JSON body exceeds the 100 KB parser limit |
@@ -60,22 +82,37 @@ overrides require at least one window; unavailable requires none. Durations are 
 
 ## Try the seeded demo
 
-Follow [setup](setup.md#demo-data) first. With the demo server running:
+Follow [setup](setup.md#demo-data), sign into the demo as Manager, and select Jane Smith.
+In that application's browser developer console, this read-only example uses your existing
+HttpOnly cookie automatically and searches the seeded dates:
 
-```sh
-curl --fail-with-body http://127.0.0.1:3001/api/staff
-curl --fail-with-body http://127.0.0.1:3001/api/staff/demo-jane-smith/availability \
-  -H 'Content-Type: application/json' \
-  -d '{"start":"2026-05-25","end":"2026-05-29","duration":30}'
+```javascript
+const response = await fetch('/api/staff/demo-jane-smith/availability', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ start: '2026-05-25', end: '2026-05-29', duration: 30 })
+});
+console.table(await response.json());
 ```
 
-This next request intentionally changes the demo by booking its first Monday slot:
+For mutation clients, first obtain the CSRF token from `/api/auth/me` and include it as
+`X-CSRF-Token`, together with the configured application `Origin` and session cookie.
+The browser supplies Origin automatically for same-origin POST/PUT/DELETE fetches.
+Do not paste account passwords into command arguments or shared logs. Booking the same
+slot twice returns 409; cancel through the UI or the DELETE endpoint to restore it.
 
-```sh
-curl --fail-with-body http://127.0.0.1:3001/api/staff/demo-jane-smith/appointments \
-  -H 'Content-Type: application/json' \
-  -d '{"date":"2026-05-25","title":"Demo visit","start":540,"duration":30}'
-```
+Daily reporting has no public send endpoint. The API process owns scheduling and durable
+retry state; `npm run reports:demo` demonstrates the mock output independently.
 
-Repeating that booking returns 409. Search again to see the blocked slot disappear, then
-cancel it through the UI or the DELETE route using the ID from the returned schedule.
+## Shared report settings
+
+Managers can `GET /api/report-settings` and `PUT /api/report-settings` with
+`{ "localTime": "08:30", "timezone": "America/Chicago" }`. The response has the same
+shape. The timezone is read-only (omitting it on PUT is allowed); HH:mm must be an exact
+24-hour time from 00:00 through 23:59. Invalid values return 400, Users receive 403, and
+reporting-disabled processes return 503 to Managers. PUT requires normal Origin/CSRF checks.
+
+Saving persists a revision and the next intended cutoff before the new callbacks become
+active. It never immediately sends a report. The next occurrence must be strictly after
+saving, and its interval starts at the last created job cutoff (or migration baseline).
+Existing jobs and retries are unchanged. Obsolete timer callbacks cannot create jobs.

@@ -1,3 +1,4 @@
+import { sessionProfile } from "../auth/http.js";
 import type { Express } from "express";
 import { z } from "zod";
 import { ERROR_MESSAGES } from "../../shared/contracts/errors.js";
@@ -50,6 +51,7 @@ export function registerScheduleRoutes(app: Express, store: StaffRepository) {
           ) => {
             staff.weekly[Number(req.params.day)] = windows;
           },
+          { id: sessionProfile(res).id, name: sessionProfile(res).displayName },
         ),
       );
     },
@@ -83,6 +85,7 @@ export function registerScheduleRoutes(app: Express, store: StaffRepository) {
               ) => a.date.localeCompare(b.date),
             );
           },
+          { id: sessionProfile(res).id, name: sessionProfile(res).displayName },
         ),
       );
     },
@@ -106,6 +109,7 @@ export function registerScheduleRoutes(app: Express, store: StaffRepository) {
               (item) => item.date !== req.params.date,
             );
           },
+          { id: sessionProfile(res).id, name: sessionProfile(res).displayName },
         ),
       );
     },

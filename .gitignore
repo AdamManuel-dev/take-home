@@ -12,3 +12,7 @@ agent-skills/
 tmp/
 test-results/
 playwright-report/
+# Credential stores and migration/recovery copies
+data/*.bak
+data/*.json.*
+data/mail-capture/

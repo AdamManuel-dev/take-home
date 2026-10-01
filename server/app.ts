@@ -1,3 +1,6 @@
+import type { ReportSettingsController } from "../shared/contracts/report-settings.js";
+import { registerReportSettingsRoutes } from "./routes/report-settings-routes.js";
+import { registerAuthentication, type AuthOptions } from "./auth/http.js";
 import express from "express";
 import { resolve } from "node:path";
 import {
@@ -13,11 +16,19 @@ import { registerScheduleRoutes } from "./routes/schedule-routes.js";
 import { registerStaffRoutes } from "./routes/staff-routes.js";
 
 /** Builds the HTTP adapter around an injected repository without opening a listening socket. */
-export function createApp(store: StaffRepository) {
+export function createApp(
+  store: StaffRepository,
+  auth: AuthOptions,
+  reportSettings?: ReportSettingsController,
+) {
   /** Express instance shared by the API routes and production static-file handler. */
   const app = express();
   app.disable("x-powered-by");
+  app.set("case sensitive routing", true);
   app.use(express.json({ limit: "100kb" }));
+
+  registerAuthentication(app, auth);
+  registerReportSettingsRoutes(app, reportSettings);
 
   // Register the staff lookup guard before any staff-scoped endpoints.
   registerStaffRoutes(app, store);

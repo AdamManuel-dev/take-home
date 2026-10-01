@@ -43,6 +43,7 @@ export type AvailabilityDayProps = {
 
 /** Inputs for AvailabilityPanel. */
 export type AvailabilityPanelProps = {
+  canBook: boolean;
   staff: Staff;
   saving: boolean;
   availability: ReturnType<typeof useAvailability>;
@@ -87,6 +88,7 @@ export type OverridesPanelProps = {
 
 /** Inputs for StaffWorkspace. */
 export type StaffWorkspaceProps = {
+  canEdit: boolean;
   staff: Staff;
   creatingStaff: boolean;
   onSavingChange: (saving: boolean) => void;
@@ -109,6 +111,7 @@ export type WeeklyHoursPanelProps = {
 
 /** Inputs for StaffPicker. */
 export type StaffPickerProps = {
+  canCreate: boolean;
   staffState: ReturnType<typeof useStaff>;
   savingSchedule: boolean;
 };

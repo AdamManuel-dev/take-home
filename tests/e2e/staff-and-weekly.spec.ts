@@ -1,3 +1,5 @@
+import { AuthPage } from "./support/auth-page";
+import { TEST_PASSWORD } from "../support/auth";
 import { expect, test } from "./support/fixtures";
 
 // Required features: staff creation, selection, recurring hours, multiple windows and persistence.
@@ -113,6 +115,7 @@ test("staff, weekly hours, overrides and bookings survive refresh and server res
 
   await app.restart();
   await page.reload();
+  await new AuthPage(page).signIn("manager", TEST_PASSWORD);
   await expect(page.locator("#staff")).toHaveValue(id);
   await scheduler.search("2026-05-25");
   await expect(page.locator(".slot")).toHaveText(["09:30 – 10:00"]);

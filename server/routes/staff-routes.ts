@@ -1,3 +1,4 @@
+import { requireScheduleEdit, sessionProfile } from "../auth/http.js";
 import type { Express } from "express";
 import { ERROR_MESSAGES } from "../../shared/contracts/errors.js";
 import type { StaffRepository } from "../../shared/contracts/persistence.js";
@@ -20,6 +21,10 @@ export function registerStaffRoutes(app: Express, store: StaffRepository) {
       req,
       res,
     ) => {
+      if (sessionProfile(res).role !== "manager") {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
       /** Untrusted name from the request, checked before calling the repository. */
       const name = parseInput(staffNameSchema, req.body?.name);
       res.status(201).json(store.create(name.trim()));
@@ -39,7 +44,7 @@ export function registerStaffRoutes(app: Express, store: StaffRepository) {
         return;
       }
 
-      next();
+      requireScheduleEdit(req, res, next);
     },
   );
 }

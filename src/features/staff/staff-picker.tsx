@@ -1,7 +1,11 @@
 import type { StaffPickerProps } from "../../../shared/contracts/component-props";
 
 /** Selects staff and creates new identities without switching during a schedule save. */
-export function StaffPicker({ staffState, savingSchedule }: StaffPickerProps) {
+export function StaffPicker({
+  staffState,
+  savingSchedule,
+  canCreate,
+}: StaffPickerProps) {
   const {
     staff,
     selected,
@@ -29,7 +33,11 @@ export function StaffPicker({ staffState, savingSchedule }: StaffPickerProps) {
         >
           {staff.length === 0 && (
             <option value="">
-              {loading ? "Loading staff…" : "Add your first staff member"}
+              {loading
+                ? "Loading staff…"
+                : canCreate
+                  ? "Add your first staff member"
+                  : "No staff available"}
             </option>
           )}
           {staff.map(
@@ -50,29 +58,32 @@ export function StaffPicker({ staffState, savingSchedule }: StaffPickerProps) {
           )}
         </select>
       </div>
-      <form className="new-staff" onSubmit={createStaff}>
-        <label htmlFor="name">Add someone new</label>
-        <div className="inline-form">
-          <input
-            id="name"
-            placeholder="Staff member’s name"
-            required
-            maxLength={100}
-            value={name}
-            disabled={creating || loading || savingSchedule}
-            onChange={
-              /** Updates the unsaved staff name from the input field. */ (e) =>
-                setName(e.target.value)
-            }
-          />
-          <button
-            className="secondary"
-            disabled={creating || loading || savingSchedule || !name.trim()}
-          >
-            {creating ? "Adding…" : "+ Add staff"}
-          </button>
-        </div>
-      </form>
+      {canCreate && (
+        <form className="new-staff" onSubmit={createStaff}>
+          <label htmlFor="name">Add someone new</label>
+          <div className="inline-form">
+            <input
+              id="name"
+              placeholder="Staff member’s name"
+              required
+              maxLength={100}
+              value={name}
+              disabled={creating || loading || savingSchedule}
+              onChange={
+                /** Updates the unsaved staff name from the input field. */ (
+                  e,
+                ) => setName(e.target.value)
+              }
+            />
+            <button
+              className="secondary"
+              disabled={creating || loading || savingSchedule || !name.trim()}
+            >
+              {creating ? "Adding…" : "+ Add staff"}
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }

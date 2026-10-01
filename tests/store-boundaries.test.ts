@@ -40,6 +40,7 @@ test("mutation results cannot alter committed schedules or leak into later saves
     /** Seeds a valid weekly interval. */ (record) => {
       record.weekly[1] = [{ start: 540, end: 600 }];
     },
+    { id: "test-actor", name: "Test actor" },
   );
   returned.weekly[1][0].start = 0;
   returned.overrides.push({
@@ -76,6 +77,7 @@ test("failed replacement cleans up its temporary file and preserves committed me
         /** Changes only the uncommitted working copy. */ (record) => {
           record.weekly[1] = [{ start: 540, end: 600 }];
         },
+        { id: "test-actor", name: "Test actor" },
       ),
   );
   assert.deepEqual(readdirSync(directory), ["schedules.json"]);

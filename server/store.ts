@@ -1,6 +1,14 @@
+import {
+  changeActorSchema,
+  type ChangeActor,
+} from "../shared/contracts/change-events.js";
+import { scheduleSchema } from "../shared/schemas.js";
+import { scheduleChanges } from "./reports/changes.js";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
+  copyFileSync,
+  constants,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -23,11 +31,44 @@ export class Store implements StaffRepository {
   /** Loads existing JSON data or starts empty; unsupported versions stop startup rather than reset data. */
   constructor(
     private path = resolve(process.env.DATA_FILE || "data/schedules.json"),
+    private now: () => Date = () => new Date(),
   ) {
     mkdirSync(dirname(path), { recursive: true });
-    this.data = existsSync(path)
+    const existing = existsSync(path);
+    const loaded = existing
       ? parseStoredData(JSON.parse(readFileSync(path, "utf8")))
-      : { version: 1, staff: [] };
+      : undefined;
+    if (loaded?.version === 2) {
+      this.data = loaded;
+    } else {
+      const backup = `${path}.v1.bak`;
+      if (loaded) {
+        if (existsSync(backup)) {
+          if (!readFileSync(backup).equals(readFileSync(path))) {
+            throw new Error(
+              "Migration backup differs from source; restore or archive it before retrying",
+            );
+          }
+        } else {
+          copyFileSync(path, backup, constants.COPYFILE_EXCL);
+        }
+      }
+      this.data = {
+        version: 2,
+        staff: loaded?.staff ?? [],
+        reportingStartedAt: now().toISOString(),
+        nextChangeSequence: 1,
+        changes: [],
+      };
+      this.commit(this.data);
+    }
+  }
+
+  reportingSnapshot() {
+    return structuredClone({
+      reportingStartedAt: this.data.reportingStartedAt,
+      changes: this.data.changes,
+    });
   }
 
   /** Lists stable staff identities without exposing mutable schedule records. */
@@ -50,7 +91,9 @@ export class Store implements StaffRepository {
   }
 
   /** Replaces the data file through a same-directory rename, then publishes the committed memory state. */
-  private commit(data: StoredData) {
+  private commit(value: StoredData) {
+    const data = parseStoredData(value);
+    if (data.version !== 2) throw new Error("Expected schedule version 2");
     /** Unique sibling file used to prepare a complete replacement before renaming it. */
     const temporary = `${this.path}.${randomUUID()}.tmp`;
 
@@ -92,7 +135,11 @@ export class Store implements StaffRepository {
   }
 
   /** Applies a change to a cloned existing record so write failures preserve committed memory. */
-  update(id: string, change: (staff: StaffRecord) => void): Schedule {
+  update(
+    id: string,
+    change: (staff: StaffRecord) => void,
+    actor?: ChangeActor,
+  ): Schedule {
     /** Working copy kept separate from committed state until the file write succeeds. */
     const data = structuredClone(this.data);
 
@@ -102,7 +149,26 @@ export class Store implements StaffRepository {
         item,
       ) => item.id === id,
     )!;
+    if (!staff) throw new Error("Unknown staff");
+    const before = structuredClone(staff);
     change(staff);
+    if (staff.id !== before.id || staff.name !== before.name)
+      throw new Error("Schedule edits cannot change staff identity");
+    scheduleSchema.parse(staff);
+    const changes = scheduleChanges(before, staff);
+    if (changes.length) {
+      const trustedActor = changeActorSchema.parse(actor);
+      const occurredAt = this.now().toISOString();
+      for (const event of changes)
+        data.changes.push({
+          ...event,
+          id: randomUUID(),
+          sequence: data.nextChangeSequence++,
+          occurredAt,
+          actor: trustedActor,
+          staff: { id: before.id, name: before.name },
+        });
+    }
     this.commit(data);
 
     return structuredClone({

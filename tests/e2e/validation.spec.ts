@@ -1,3 +1,4 @@
+import { AuthPage } from "./support/auth-page";
 import { expect, test } from "./support/fixtures";
 
 for (const [name, windows, message] of [
@@ -95,6 +96,7 @@ test("the real HTTP boundary rejects unsupported durations and impossible dates"
 
   for (const duration of [0, -15, 20, "30"]) {
     const response = await page.request.post(`/api/staff/${id}/availability`, {
+      headers: await new AuthPage(page).mutationHeaders(),
       data: { start: "2026-05-25", end: "2026-05-25", duration },
     });
     expect(response.status()).toBe(400);
@@ -104,12 +106,14 @@ test("the real HTTP boundary rejects unsupported durations and impossible dates"
   const invalidDate = await page.request.put(
     `/api/staff/${id}/overrides/2026-02-30`,
     {
+      headers: await new AuthPage(page).mutationHeaders(),
       data: { mode: "unavailable", windows: [] },
     },
   );
   expect(invalidDate.status()).toBe(400);
 
   const invalidWindow = await page.request.put(`/api/staff/${id}/weekly/1`, {
+    headers: await new AuthPage(page).mutationHeaders(),
     data: { windows: [{ start: 600, end: 540 }] },
   });
   expect(invalidWindow.status()).toBe(400);

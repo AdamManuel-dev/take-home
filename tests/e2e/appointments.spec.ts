@@ -1,3 +1,4 @@
+import { AuthPage } from "./support/auth-page";
 import { expect, test } from "./support/fixtures";
 
 // Booking and the agenda are required follow-up features beyond the original take-home brief.
@@ -72,6 +73,7 @@ test("a stale booking is rejected without double booking, and another staff memb
 
   // Simulate another client claiming the offered interval after this page's search.
   const claimed = await page.request.post(`/api/staff/${first}/appointments`, {
+    headers: await new AuthPage(page).mutationHeaders(),
     data: {
       date: "2026-05-25",
       start: 540,

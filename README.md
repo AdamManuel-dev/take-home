@@ -4,8 +4,10 @@ A staff availability scheduler built with React, TypeScript, Node.js, and Expres
 
 Create staff, save multiple weekly windows, add date exceptions, and calculate appointment
 slots, book appointments, and view each staff member's appointment schedule. Data persists
-in a local JSON file. No database setup, authentication, or external
-calendar account is required.
+in local JSON files. User and Manager accounts control editing. Daily schedule-change PDFs
+are generated at a shared Manager-selected time (default 09:00 America/Chicago)
+and saved as mock email captures; no real email
+is sent. No database or external calendar account is required.
 
 ## Documentation and submission
 
@@ -28,12 +30,14 @@ Use Node.js 24.6.0 (recorded in `.nvmrc`) and npm. Run from this project directo
 
 ```sh
 npm ci
+npm run provision:account
 npm run dev
 ```
 
 Open http://127.0.0.1:5173. Vite serves React and forwards `/api` to Express on port 3001.
-A fresh checkout starts empty; create your first staff member in the form. There is no automatic seed
-or reset at startup.
+Provision a Manager first using the hidden password prompts (staff ID is optional for Managers).
+Sign in, then create your first staff member. To provision Users, stop the API and link each
+account to an existing staff ID. There is no automatic seed or reset at startup.
 
 For a single-server build:
 
@@ -60,7 +64,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-This builds the app and runs 27 scenarios at both desktop and mobile sizes (54 checks).
+This builds the app and runs 37 scenarios at both desktop and mobile sizes (74 checks).
 Each scenario opens a visible Chromium browser and uses the real Express API with its own
 temporary data file and an automatically assigned port. No development server or seed data is
 needed. Tests clean up their server and data even after failures. The persistence scenario also
@@ -78,48 +82,51 @@ Failures retain screenshots and traces under `test-results/`. The report is writ
 so failures remain visible. Browser tests live in `tests/e2e/`, with shared user actions and
 server fixtures in `tests/e2e/support/`.
 
-| Requirement | End-to-end coverage |
-| --- | --- |
-| Create and select staff | Required names, trimming, duplicate names, separate schedules |
-| Recurring weekly availability | All seven weekdays, multiple windows, weekly recurrence, day off |
-| Date-specific overrides | Unavailable, replace, add, edit, remove, overlap union, add on a day off |
-| Date-range queries | Both endpoints, reversed ranges, required dates, 90-day limit, DST boundaries |
-| Appointment durations | Exact slot boundaries for 15, 30, 45, and 60 minutes; gaps and short windows |
-| Invalid availability | Reversed/equal times, overlaps, malformed times, empty add/replace overrides |
-| Availability source | Weekly, combined, replaced, added, day-off override, no recurring hours |
-| Backend validation | Real HTTP rejection of invalid durations, dates, and window boundaries |
-| Persistence | Staff, weekly hours, overrides, and bookings after refresh and server restart |
-| Booking and agenda | Required title, filtering, conflicts, cancellation, staff isolation |
-| Request safety | Stale searches, pending-save guards, failed saves, malformed responses, retry |
-| Responsive interface | Every scenario at 1440px and 375px, overflow and uncaught-error checks |
+| Requirement                   | End-to-end coverage                                                           |
+| ----------------------------- | ----------------------------------------------------------------------------- |
+| Create and select staff       | Required names, trimming, duplicate names, separate schedules                 |
+| Recurring weekly availability | All seven weekdays, multiple windows, weekly recurrence, day off              |
+| Date-specific overrides       | Unavailable, replace, add, edit, remove, overlap union, add on a day off      |
+| Date-range queries            | Both endpoints, reversed ranges, required dates, 90-day limit, DST boundaries |
+| Appointment durations         | Exact slot boundaries for 15, 30, 45, and 60 minutes; gaps and short windows  |
+| Invalid availability          | Reversed/equal times, overlaps, malformed times, empty add/replace overrides  |
+| Availability source           | Weekly, combined, replaced, added, day-off override, no recurring hours       |
+| Backend validation            | Real HTTP rejection of invalid durations, dates, and window boundaries        |
+| Persistence                   | Staff, weekly hours, overrides, and bookings after refresh and server restart |
+| Booking and agenda            | Required title, filtering, conflicts, cancellation, staff isolation           |
+| Request safety                | Stale searches, pending-save guards, failed saves, malformed responses, retry |
+| Responsive interface          | Every scenario at 1440px and 375px, overflow and uncaught-error checks        |
 
 The browser runs in Asia/Tokyo to verify that the app consistently uses America/Chicago.
 Happy paths use real requests. Only failure and race tests intercept responses to introduce
 controlled delays, server failures, or malformed data.
 
-For an isolated example matching the brief, run `npm run seed:demo`, then start with
-`DATA_FILE=data/demo-schedules.json npm run dev`. Select Jane Smith and search May 25-29,
-2026. Existing demo files are never overwritten. See [setup](docs/setup.md) for PowerShell.
+For an isolated example matching the brief, follow the [seed and Manager provisioning
+steps](docs/setup.md#demo-data), sign in, select Jane Smith, and search May 25-29, 2026.
+Existing demo files are never overwritten. See setup for isolated account/report paths.
 
 Run `npm run verify` for the same formatting, test, type-check, and build checks used by CI.
 
 ## Configuration and persistence
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `PORT` | `3001` | Express port; Vite's development proxy expects the default |
-| `DATA_FILE` | `data/schedules.json` | Absolute path, or path relative to the working directory |
+| Variable            | Default                   | Meaning                                                    |
+| ------------------- | ------------------------- | ---------------------------------------------------------- |
+| `PORT`              | `3001`                    | Express port; Vite's development proxy expects the default |
+| `DATA_FILE`         | `data/schedules.json`     | Schedule and atomic change history                         |
+| `USERS_FILE`        | `data/users.json`         | Private account store                                      |
+| `REPORTS_FILE`      | `data/reports.json`       | Frozen report jobs and delivery state                      |
+| `MAIL_CAPTURE_DIR`  | `data/mail-capture`       | Mock message metadata and PDF attachments                  |
+| `REPORTING_ENABLED` | Enabled                   | Set `false` to disable background reporting                |
+| `APP_ORIGIN`        | Local development origins | Required HTTPS public origin in production                 |
 
 Example: `DATA_FILE=/tmp/my-schedules.json npm run dev`. Variables are set in the shell;
 `.env` files are not loaded automatically.
 
-The JSON file is created on the first successful save. Its parent directory is created at
-startup. No migration or seed command is needed. The data format has a `version: 1` field.
-Malformed JSON, unsupported versions, and invalid nested schedules stop startup instead of
-resetting or rewriting the data. Stored staff IDs, windows, overrides, and appointments are
-validated, including duplicate identities and overlapping bookings.
-Existing version-1 files without appointments remain readable; the appointment array is added
-when the first appointment is booked.
+The schedule file is created at startup with a durable reporting baseline and `version: 2`.
+Version 1 is migrated automatically after preserving an exact `.v1.bak` copy. Staff, weekly
+hours, overrides, and appointments are preserved; existing schedules create no change events.
+Corrupt or unknown formats stop startup. Account and report files use separate versioned
+envelopes. See [setup](docs/setup.md) for backup recovery and single-process operation.
 
 Each staff record contains a generated UUID, a name, seven weekly window arrays, date
 overrides, and appointments. Appointments have a UUID, title, calendar date, start, and end.
@@ -141,33 +148,36 @@ durability guarantees. Concurrent browser edits use last successful save wins.
 The implementation applies the project-local architecture-patterns guide, with a small layered
 structure rather than a framework or a class for every operation:
 
-| Area | Responsibility |
-| --- | --- |
-| `shared/contracts/types.ts` | Domain, request, draft, and schedule-state types |
-| `shared/contracts/component-props.ts` | Named React component input types |
-| `shared/contracts/persistence.ts` | Repository contract and persisted-record types |
-| `shared/contracts/test-support.ts` | End-to-end fixture and page-action types |
-| `shared/contracts/errors.ts` | Error classes and shared validation/HTTP messages |
-| `shared/constants.ts`, `shared/time.ts` | Scheduling constants and minute formatting |
-| `shared/schemas.ts` | Zod contracts shared by forms, HTTP boundaries, and persistence |
-| `shared/validation.ts` | Converts schema failures into readable validation errors |
-| `shared/dates.ts` | Luxon calendar arithmetic and display in America/Chicago |
-| `server/scheduling.ts` | Query validation, window resolution, slot calculation, empty reasons |
-| `server/appointments.ts` | Booking validation against current offered slots |
-| `server/store.ts` | JSON file implementation and atomic schedule replacement |
-| `server/stored-data.ts` | Runtime validation of persisted records, including legacy schedules |
-| `server/app.ts` | Express setup, route registration, static files, and JSON errors |
-| `server/routes/` | Staff, schedule, availability, and appointment HTTP adapters |
-| `server/index.ts` | Composition root: wires persistence to Express and starts the server |
-| `src/features/staff/` | Staff selection, creation form, and staff request state |
-| `src/features/schedule/` | Workspace, weekly editors, and serialized schedule mutations |
-| `src/features/overrides/` | Override form, saved list, and draft/save state |
-| `src/features/availability/` | Search form, results, day cards, and stale-response protection |
-| `src/features/appointments/` | Booking form, booking draft state, and staff agenda |
-| `src/shared/` | Reusable window inputs, draft-time parsing, and validated HTTP transport |
-| `src/layout/` | Page header, heading, and footer without feature state |
-| `tests/` | Domain behavior, API contracts, failure preservation, and restart persistence |
-| `tests/e2e/` | Repeatable browser coverage mapped to every required feature |
+| Area                                    | Responsibility                                                                 |
+| --------------------------------------- | ------------------------------------------------------------------------------ |
+| `shared/contracts/types.ts`             | Domain, request, draft, and schedule-state types                               |
+| `shared/contracts/component-props.ts`   | Named React component input types                                              |
+| `shared/contracts/persistence.ts`       | Repository contract and persisted-record types                                 |
+| `shared/contracts/test-support.ts`      | End-to-end fixture and page-action types                                       |
+| `shared/contracts/errors.ts`            | Error classes and shared validation/HTTP messages                              |
+| `shared/constants.ts`, `shared/time.ts` | Scheduling constants and minute formatting                                     |
+| `shared/schemas.ts`                     | Zod contracts shared by forms, HTTP boundaries, and persistence                |
+| `shared/validation.ts`                  | Converts schema failures into readable validation errors                       |
+| `shared/dates.ts`                       | Luxon calendar arithmetic and display in America/Chicago                       |
+| `server/scheduling.ts`                  | Query validation, window resolution, slot calculation, empty reasons           |
+| `server/appointments.ts`                | Booking validation against current offered slots                               |
+| `server/store.ts`                       | JSON file implementation and atomic schedule replacement                       |
+| `server/stored-data.ts`                 | Runtime validation of persisted records, including legacy schedules            |
+| `server/app.ts`                         | Express setup, route registration, static files, and JSON errors               |
+| `server/routes/`                        | Staff, schedule, availability, and appointment HTTP adapters                   |
+| `server/index.ts`                       | Composition root: authentication, storage, mock reporting, cron, shutdown      |
+| `server/auth/`                          | Account storage, scrypt passwords, sessions, CSRF and permission guards        |
+| `server/reports/`                       | Event diff, intervals, PDF rendering, capture delivery, retries and scheduling |
+| `src/features/auth/`                    | Sign-in, sign-out, session expiry and identity generation guards               |
+| `src/features/staff/`                   | Staff selection, creation form, and staff request state                        |
+| `src/features/schedule/`                | Workspace, weekly editors, and serialized schedule mutations                   |
+| `src/features/overrides/`               | Override form, saved list, and draft/save state                                |
+| `src/features/availability/`            | Search form, results, day cards, and stale-response protection                 |
+| `src/features/appointments/`            | Booking form, booking draft state, and staff agenda                            |
+| `src/shared/`                           | Reusable window inputs, draft-time parsing, and validated HTTP transport       |
+| `src/layout/`                           | Page header, heading, and footer without feature state                         |
+| `tests/`                                | Domain behavior, API contracts, failure preservation, and restart persistence  |
+| `tests/e2e/`                            | Repeatable browser coverage mapped to every required feature                   |
 
 The scheduling engine imports no Express, filesystem, or React code. Express accepts a
 repository interface instead of constructing a store. The store knows nothing about HTTP.
@@ -219,8 +229,8 @@ success or failure is visible. Drafts do not survive a page refresh.
    Touching appointments are allowed. Original window-based slot anchoring is preserved rather
    than restarted after a booking. A fully booked date has a distinct empty-state explanation.
 10. Every date is returned, with effective windows, source, override mode if present, and slots.
-   Empty results distinguish a recurring day off, an unavailable override, and windows too short
-   for the chosen duration.
+    Empty results distinguish a recurring day off, an unavailable override, and windows too short
+    for the chosen duration.
 
 For example, 09:00-10:00 plus added 08:45-09:15 resolves to 08:45-10:00. Thirty-minute starts
 are 08:45 and 09:15. Resolving availability before slot generation preserves this anchoring;
@@ -246,20 +256,22 @@ existing appointments; they remain visible in the staff schedule until explicitl
 
 ## API
 
-All endpoints use JSON. Validation failures return status 400 with `{ "error": "message" }`.
+Business endpoints require a session. Mutations require a trusted Origin and CSRF token;
+Users edit their own staff schedules, while Managers edit all schedules and create staff.
+Anonymous access returns 401 and disallowed operations return 403. Validation failures return status 400 with `{ "error": "message" }`.
 Unknown staff returns 404; persistence failures return 500 without claiming a successful save.
 
-| Method and route | Request |
-| --- | --- |
-| `GET /api/staff` | None |
-| `POST /api/staff` | `{ "name": "Taylor" }` |
-| `GET /api/staff/:id/schedule` | None |
-| `PUT /api/staff/:id/weekly/:day` | `{ "windows": [{ "start": 540, "end": 1020 }] }` |
-| `PUT /api/staff/:id/overrides/:date` | `{ "mode": "unavailable", "windows": [] }` |
-| `DELETE /api/staff/:id/overrides/:date` | None |
-| `POST /api/staff/:id/appointments` | `{ "date": "2026-09-28", "title": "Consultation", "start": 540, "duration": 30 }` |
-| `DELETE /api/staff/:id/appointments/:appointmentId` | None |
-| `POST /api/staff/:id/availability` | `{ "start": "2026-09-28", "end": "2026-09-30", "duration": 30 }` |
+| Method and route                                    | Request                                                                           |
+| --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `GET /api/staff`                                    | None                                                                              |
+| `POST /api/staff`                                   | `{ "name": "Taylor" }`                                                            |
+| `GET /api/staff/:id/schedule`                       | None                                                                              |
+| `PUT /api/staff/:id/weekly/:day`                    | `{ "windows": [{ "start": 540, "end": 1020 }] }`                                  |
+| `PUT /api/staff/:id/overrides/:date`                | `{ "mode": "unavailable", "windows": [] }`                                        |
+| `DELETE /api/staff/:id/overrides/:date`             | None                                                                              |
+| `POST /api/staff/:id/appointments`                  | `{ "date": "2026-09-28", "title": "Consultation", "start": 540, "duration": 30 }` |
+| `DELETE /api/staff/:id/appointments/:appointmentId` | None                                                                              |
+| `POST /api/staff/:id/availability`                  | `{ "start": "2026-09-28", "end": "2026-09-30", "duration": 30 }`                  |
 
 Weekly saves replace one weekday atomically, including an empty array for a day off. Override
 saves create or replace one date. Names are trimmed and limited to 100 characters. Window
@@ -269,17 +281,20 @@ than coercing strings to numbers.
 ## Verification
 
 The suite covers scheduling, validation, HTTP behavior, bookings, and persistence failures.
-All 96 core tests and 54 end-to-end checks passed, along with the build and formatting checks.
-The browser suite runs 27 scenarios at desktop and mobile sizes, as described above.
+The core suite covers authentication, atomic audit history, PDF layout, mocked delivery,
+retry/restart recovery and daily scheduling, including the full integration workflow.
+The browser suite runs 37 scenarios at desktop and mobile sizes (74 checks).
+See [testing](docs/testing.md) for release-gate evidence and reproducible commands.
 See [testing and verification](docs/testing.md) for the manual acceptance procedure and limits.
 The CI workflow runs the core automated suite; run `npm run test:e2e` for the browser suite.
 
 ## Scope and review notes
 
 The initial scope prioritized availability; the follow-up adds appointment booking and agendas.
-It excludes auth, external calendars, multiple timezones, schedule history, calendar grids,
-bulk editing, and staff deletion. The server binds to loopback for local use. Deploying this
-for a team would require authentication, appropriate storage, and conflict handling.
+The extension includes authentication and weekly/override history with daily PDF reports.
+External calendars, multiple scheduling timezones, calendar grids, bulk editing, staff deletion,
+and real email delivery remain excluded. The server binds to loopback; multi-process hosting
+would require coordinated storage and conflict handling.
 
 Codex assisted with this documentation and setup. The pre-existing project notes also report
 AI assistance with implementation, tests, review, and browser checks. The candidate must
@@ -294,19 +309,19 @@ and synchronous updates do not provide shared database transactions or revision 
 
 Audited against "Interview Project - 202605 - Availability Scheduler.pdf".
 
-| Required capability | Implementation and verification |
-| --- | --- |
-| Create staff members | Staff creation form and validated API; duplicate names retain distinct IDs |
-| Recurring weekly availability | Seven weekday editors, multiple windows, explicit per-day saves |
-| Date-specific overrides | Unavailable, replace, and add modes; edit/delete controls and tests |
-| Query a date range | Staff selection, inclusive date controls, duration selector, date-grouped results |
-| Appointment duration | 15, 30, 45, and 60 minutes; exact hour-window examples tested |
-| Invalid window handling | Server rejects reversed/equal times, overlaps, empty custom overrides, bad durations |
-| Availability source | Weekly, override, combined, and day-off labels with explanations |
-| Fullstack application | React interface, Express API, TypeScript, persistent JSON file |
-| Testable scheduling logic | Pure domain functions independent of React, Express, and filesystem |
-| Setup and decision notes | Commands, environment variables, assumptions, algorithm, and tradeoffs above |
-| AI transparency | Documented assistance and confidence limits; personal examples await confirmation |
+| Required capability           | Implementation and verification                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
+| Create staff members          | Staff creation form and validated API; duplicate names retain distinct IDs           |
+| Recurring weekly availability | Seven weekday editors, multiple windows, explicit per-day saves                      |
+| Date-specific overrides       | Unavailable, replace, and add modes; edit/delete controls and tests                  |
+| Query a date range            | Staff selection, inclusive date controls, duration selector, date-grouped results    |
+| Appointment duration          | 15, 30, 45, and 60 minutes; exact hour-window examples tested                        |
+| Invalid window handling       | Server rejects reversed/equal times, overlaps, empty custom overrides, bad durations |
+| Availability source           | Weekly, override, combined, and day-off labels with explanations                     |
+| Fullstack application         | React interface, Express API, TypeScript, persistent JSON file                       |
+| Testable scheduling logic     | Pure domain functions independent of React, Express, and filesystem                  |
+| Setup and decision notes      | Commands, environment variables, assumptions, algorithm, and tradeoffs above         |
+| AI transparency               | Documented assistance and confidence limits; personal examples await confirmation    |
 
 The specification's Jane Smith example is an API integration test: May 25 returns 09:00,
 09:30, 10:00, and 10:30; May 26 has no weekly hours; May 27 is unavailable by override.
@@ -314,10 +329,19 @@ The same test verifies May 28 replacement hours of 10:00-14:00 and May 29 added 
 17:00-19:00. It also saves multiple windows on one weekday.
 
 Automated tests are an implemented nice-to-have. An optional demo seed is available; calendar grids and bulk editing
-are intentionally omitted. Authentication and calendar integration remain excluded.
+are intentionally omitted. Authentication is implemented; calendar integration remains excluded.
 Booking and the staff agenda are extensions requested separately after the original scope.
 
 The requested GitHub submission is still a handoff step: this local project has not been
 published to GitHub. The application, documentation, CI workflow, and demo setup are prepared locally.
 The candidate should confirm the AI notes before submission. This audit does not claim that
 repository submission or the candidate's follow-up interview has been completed.
+
+## Daily report demonstration
+
+Run `npm run reports:demo` to generate two days of captured reports in a new temporary
+directory: one containing edits and one with no changes. The command prints the directory;
+inspect `mail-capture/*/attachment.pdf`, `message.json`, and `demo-summary.json`. It never
+reads or changes your normal data files, displays passwords, or sends real email. Remove
+that temporary directory when finished. For live operation, the API creates daily jobs,
+recovers missed days at startup, and retries individual failed recipients independently.

@@ -41,6 +41,7 @@ try {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(data, null, 2) + "\n", {
     encoding: "utf8",
+    // Refuse to replace any existing file, including migrated version 2 data.
     flag: "wx",
     mode: 0o600,
   });

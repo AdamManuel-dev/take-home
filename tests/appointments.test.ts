@@ -3,8 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
-import request from "supertest";
-import { createApp } from "../server/app.js";
+import request, { createApp } from "./support/auth.js";
 import { calculateAvailability } from "../server/scheduling.js";
 import { Store } from "../server/store.js";
 

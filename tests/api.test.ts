@@ -3,8 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
-import request from "supertest";
-import { createApp } from "../server/app.js";
+import request, { createApp } from "./support/auth.js";
 import { Store } from "../server/store.js";
 
 /** Creates an isolated temporary repository and Express app, with cleanup after the test. */
@@ -207,6 +206,7 @@ test("disk write failure leaves previously committed in-memory state intact", /*
         ) => {
           record.weekly[1] = [{ start: 540, end: 600 }];
         },
+        { id: "test-actor", name: "Test actor" },
       ),
   );
   assert.deepEqual(store.get(staff.id)!.weekly[1], []);

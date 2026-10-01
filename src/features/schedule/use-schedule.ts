@@ -10,6 +10,7 @@ export function useSchedule(
   staff: Staff,
   creatingStaff: boolean,
   onSavingChange: (saving: boolean) => void,
+  canEdit: boolean,
 ) {
   /** Last loaded or successfully saved schedule, kept separate from editor drafts. */
   const [schedule, setSchedule] = useState<Schedule | null>(null);
@@ -61,6 +62,7 @@ export function useSchedule(
 
   /** Serializes schedule mutations, blocks staff navigation, and invalidates availability results. */
   async function mutate(path: string, method: string, body?: unknown) {
+    if (!canEdit) throw new Error("This schedule is read-only.");
     if (savingRef.current || creatingStaff)
       throw new OperationInProgressError();
 

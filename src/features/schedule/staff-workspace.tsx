@@ -10,6 +10,7 @@ import { WeeklyHoursPanel } from "./weekly-hours-panel";
 /** Coordinates a selected staff member's saved schedule, editors, and availability searches. */
 export function StaffWorkspace({
   staff,
+  canEdit,
   onSavingChange,
   creatingStaff,
 }: StaffWorkspaceProps) {
@@ -23,7 +24,7 @@ export function StaffWorkspace({
     saving,
     availability,
     mutate,
-  } = useSchedule(staff, creatingStaff, onSavingChange);
+  } = useSchedule(staff, creatingStaff, onSavingChange, canEdit);
 
   if (loadError)
     return (
@@ -56,6 +57,12 @@ export function StaffWorkspace({
   return (
     <div className="workspace">
       <div className="edit-column">
+        {!canEdit && (
+          <p className="hint" role="status">
+            Read-only schedule. You can view and search everyone's availability;
+            only edit your own.
+          </p>
+        )}
         <div className="view-switch" role="group" aria-label="Schedule view">
           <button
             aria-pressed={view === "availability"}
@@ -90,12 +97,12 @@ export function StaffWorkspace({
           <WeeklyHoursPanel
             staff={staff}
             schedule={schedule}
-            disabled={saving || creatingStaff}
+            disabled={saving || creatingStaff || !canEdit}
             mutate={mutate}
           />
           <OverridesPanel
             schedule={schedule}
-            disabled={saving || creatingStaff}
+            disabled={saving || creatingStaff || !canEdit}
             mutate={mutate}
           />
         </div>
@@ -103,7 +110,7 @@ export function StaffWorkspace({
           <AppointmentAgenda
             staff={staff}
             appointments={schedule.appointments ?? []}
-            saving={saving || creatingStaff}
+            saving={saving || creatingStaff || !canEdit}
             cancel={
               /** Removes a booking through the same serialized schedule mutation path. */
               (id) => mutate(`/appointments/${id}`, "DELETE")
@@ -112,6 +119,7 @@ export function StaffWorkspace({
         </div>
       </div>
       <AvailabilityPanel
+        canBook={canEdit}
         staff={staff}
         saving={saving || creatingStaff}
         availability={availability}

@@ -18,7 +18,14 @@ export class OperationInProgressError extends Error {
 }
 
 /** API failures carry readable feedback without exposing transport implementation details. */
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
 
 export const API_ERROR_MESSAGES = {
   unreachable:

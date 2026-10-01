@@ -801,3 +801,40 @@ footer {
     gap: 10px;
   }
 }
+
+.login-card {
+  max-width: 440px;
+  margin: 0 auto;
+}
+.login-card fieldset {
+  display: grid;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  margin: 20px 0 0;
+}
+.session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.report-settings {
+  margin-bottom: 22px;
+}
+.report-settings h2 {
+  margin: 0 0 8px;
+}
+.report-settings form {
+  max-width: 490px;
+}
+.report-settings input[type="time"] {
+  min-width: 110px;
+}
+@media (max-width: 480px) {
+  .report-settings .inline-form {
+    flex-wrap: wrap;
+  }
+}
